@@ -1,0 +1,323 @@
+from bs4 import BeautifulSoup as b_s
+from datetime import datetime as dt
+import requests # 뒤에 s가 붙는다.
+import pandas as pd
+
+
+# 아래 5개는 어디 쓰이는지 모르겠다.
+from IPython.display import display
+import re
+import time
+from googleapiclient.discovery import build
+import random
+
+
+
+today = dt.today().strftime('%Y-%m-%d-%A') # -> dt 정의해야 한다. -> from datetime import datetime as dt 로 dt 약어화
+today
+
+def today_weather():
+    html   = requests.get('https://search.naver.com/search.naver?where=nexearch&sm=top_hty&fbm=1&ie=utf8&query=%EB%82%A0%EC%94%A8') # requests 로 주소를 불러온다. -> import requests
+    soup   = b_s(html.text,'html.parser') # BeautifulSoup으로 html을 파싱한다. -> from bs4 import BeautifulSoup as b_s -> BeautifulSoup 이 너무 기니까 b_s 로 줄였다.
+    Wdata  = soup.find('div',{'class':'weather_box'}) # div에 , 쓰고 dictionary 식으로 쓰는 건 처음 알았네. 1번 사진 . Weather data = Wdata
+    
+    find_lc= Wdata.find('span',{'class':'btn_select'}).text # 현재 위치의 주소 뽑기. 2번 사진 .
+    print('현재 위치 : '+ find_lc) # ℃ 는 섭씨 검색하면 얻을 수 있다.
+        
+    find_ct= Wdata.find('span',{'class':'todaytemp'}).text # F12 Elements에서 html 하나씩 전부 내려가며 찾지 말고, 포인터로 찍으면 된다.  # 뒤에 .text 잊지 않아야 한다. 사람이 읽기 용이해야 하니까
+    print('현재 온도 : '+ find_ct, '℃') #@ find_lc는 , 로 ℃와 이어야 한다. 위의 find_lc에서... 맞나?   find_lc+'℃'하게 되면 현재 온도 숫자 표기가 안 된다? 
+    
+    find_ht= Wdata.select_one('span.max > span.num').text #  # span.max > span 뒤에 왜 num이 붙지? -> 3번 사진
+    print("최고온도 : "+find_ht+'℃') # find_ht , '℃' 가 아니라 중간에 + 를 넣어도 상관 없다.
+# 왜 .find가 아니고 .select_one 를 썼지? -> select는 CSS selector로 tag 객체를 찾아 반환한다. 이는 CSS에서 HTML을 태깅하는 방법을 활용한 메소드다. 가장 첫 번째 결과를 반환하는 select_one()은 find()에, 전체 결과를 리스트로 반환하는 select()는 find_all()에 대응한다.
+#     find처럼 태그 이름, 속성, 속성값을 특정하는 방식은 같다. 하지만 CSS는 이 외에도 다양한 선택자(selector)를 갖기 때문에 여러 요소를 조합하여 태그를 특정하기 쉽다. 예를 들어 특정 경로의 태그를 객체로 반환하고 싶을 때, find의 경우 반복적으로 코드를 작성해야 한다. select는 직접 하위 경로를 지정할 수 있기 때문에 간편하다.    
+# 'span.max > span.num'는 같은 속성값에 속하니 '' 로 묶는다.
+# select_one 은 find 처럼 'class': 를 앞에 붙이지 않는다.
+# select_one 은 {}도 씌우지 않고 한 '' 안에서 . 로 잇는다. -> '키' : '밸류' 구조가 아니기 때문.
+# 씌우면 too many values to unpack (expected 2) 오류가 난다.
+# span.span. 도 아니다. 앞에 span. 은 안 붙여도 된다.
+# find가 아니라 맨 위에 것 하나만 고르는 select_one이기 때문.
+# 애초에 select_one은 그냥 > 로 잇는다.
+    find_lt= Wdata.select_one('span.min > span.num').text
+    print('최저온도 : '+find_lt,'℃')
+
+    find_ft= Wdata.select_one('span.sensible > em > span.num').text # 보통 박스가 큰 것이 상위네. 순서대로 타고 내려가면 된다.
+    print('체감온도 : '+find_ft,'℃')
+    
+    
+    
+#     구름많음, 어제보다 2˚ 높아요    
+#     find_dt = Wdata.select_one('div.today_area._mainTabContent > div.main_info > div > ul > li:nth-child(1) > p').text    -> 이게 김광훈
+    find_a= Wdata.select_one('div.weather_area._mainArea > div.today_area._mainTabContent > div.main_info > div > ul > li:nth-child(1) > p').text # 실험 적용 성공적.
+    print(find_a) # 'find_dt' (x)  ' ' 씌우는 실수 주의
+# main_pack > section.sc_new.cs_weather._weather > div > div.api_cs_wrap > div.weather_box > 
+# div.weather_area._mainArea > div.today_area._mainTabContent > div.main_info > div > ul > li:nth-child(1) > p 실험 2 => 잘 된다.
+# 이게 위의 경로 바로 위 li의 경로다. 사실 당연하지. 하지만 직접 보니 감이 팍 온다. -> 4번 사진
+
+
+
+    find_pp_am= Wdata.select_one('li>span.point_time.morning > span.rain_rate > span.num').text
+# find_am_hm = Wdata.select_one('li>span.point_time.morning>span.rain_rate>span.num').text # 포인터로 박스를 체크하며 큰 것에서 작은 것으로 경로 설정해 들어가면 된다.
+# 여기서는 li 가 span의 상위 태그이기에 li를 쓴 거다. 무조건 span이 {} 앞에 오는 건 당연히 아니다. -> 5번 사진
+# 'li>span.point_time morning > span.rain_rate wet > span.num' 에서 'NoneType' object has no attribute 'text' 오류 ->=>  속성에 공백(스페이스바)이 있기 때문이다. 저 공백은  .  으로 채워주면 된다.
+#     find_am_hm= Wdata.select_one('li>span.point_time.morning > span.rain_rate > span.num').text
+    print('오전강수확률 : '+find_pp_am,'%')
+    
+# main_pack > section.sc_new.cs_weather._weather > div > div.api_cs_wrap > div.weather_box > 
+# div.weather_area._mainArea > div.table_info.weekly._weeklyWeather > ul:nth-child(2) > 
+# li:nth-child(1) > span.point_time.morning > span.rain_rate.wet > span.blind
+
+    find_pp_pm= Wdata.select_one('li>span.point_time.afternoon > span.rain_rate > span.num').text
+    print('오후강수확률 : '+find_pp_pm,'%')
+    
+    
+# 정상 가동.
+# 여기 까지는
+# from bs4 import BeautifulSoup as b_s
+# from datetime import datetime as dt
+# import requests
+# 만 있으면 됐다.    
+    
+    
+##############이제 내일 날씨
+
+def tomorrow_weather():
+    html      = requests.get('https://search.naver.com/search.naver?where=nexearch&sm=top_hty&fbm=1&ie=utf8&query=%EB%82%A0%EC%94%A8') # 오늘 날씨 주소와 다르지 않다. 그냥 같은 페이지 안에서 오늘, 내일, 모레, 월간 구획만 나뉘어져 있을 뿐이네.
+    soup      = b_s(html.text,'html.parser')
+    Wdata     = soup.find('div', {'class':'weather_box'}) # 여기까지 오늘 날씨 코드와 같다.
+    find_t_am = Wdata.select_one('div.main_info.morning_box>p.info_temperature>span.todaytemp').text
+    print("내일 오전 기온 : "+find_t_am+'℃')
+    
+    find_a_2  = Wdata.select_one('div.main_info.morning_box > div.info_data> ul.info_list > li> p.cast_txt').text 
+    # 6번 사진 -> p.cast_txt 보고 바로 'li>p.cast_txt' 넣어봤는데 => <p class="cast_txt">흐림, 어제보다 1˚ 낮아요</p>  나왔네. -> <p ~~~> </p> 나오는 문제는 뒤에 .text 를 붙여서 해결했지만, 정작 내일 날씨 대기질이 아니라 오늘 날씨 대기질이다. 좀더 세세히 경로를 탈 필요가 있었다. 결국 해결.
+# main_pack > section.sc_new.cs_weather._weather > div > div.api_cs_wrap > div.weather_box > 
+# div.weather_area._mainArea > div:nth-child(4) > div:nth-child(2) > div > ul > li:nth-child(1) > p
+    print(find_a_2)
+    
+#     find_pp_tm_am= Wdata.select_one('div.table_info weekly._weeklyWeather > ul.list_area._pageList > li.date_info.today > span.point_time.morning > span.rain_rate > span.num').text
+    find_pp_tm_am= Wdata.select_one('div.weather_area._mainArea > div.table_info.weekly._weeklyWeather > ul:nth-child(2) > li:nth-child(2) > span.point_time.morning > span.rain_rate > span.num').text
+#     li>span.point_time.morning>span.rain_rate>span.num
+    print("내일 오전 강수 확률 : "+find_pp_tm_am+"%")
+#     can only concatenate str (not "Tag") to str  -> 뒤에 text 를 안 붙이면 이런 오류도 생긴다.
+
+#main_pack > section.sc_new.cs_weather._weather > div > div.api_cs_wrap > div.weather_box > 
+# div.weather_area._mainArea > div.table_info.weekly._weeklyWeather > ul:nth-child(2) > li:nth-child(2) > span.point_time.morning > span.rain_rate > span.num
+
+    
+    
+    
+##############이제 미세먼지
+
+def dust():
+    html    = requests.get('https://search.naver.com/search.naver?where=nexearch&sm=top_hty&fbm=1&ie=utf8&query=%EB%82%A0%EC%94%A8')
+    soup    = b_s(html.text,'html.parser')
+    Ddata   = soup.find('div', {'class':'weather_box'}) # 미세먼지도 여기까지 같다. 변수명만 Ddata로 바꿨다.
+
+    
+#     find_ds = Ddata.select_one('dl.indicator>dd>span.num').text
+#     ev_du = int(find_du.strip('㎍/㎥'))
+    
+    
+    # ds   = 미세먼지
+    # M_ds = 초미세먼지
+    
+    
+# 이렇게 수치 별로 단계 구분했네.
+
+    # 미세먼지
+
+    find_ds = Ddata.select_one('div.sub_info > div.detail_box > dl.indicator > dd.lv1 > span.num').text
+    lv_ds   = int(find_ds.strip('㎍/㎥'))    
+
+    if lv_ds  <= 30:
+        lv_ds  = "좋음"  # 대입이니까 == 가 아니라 = 다.
+    elif 30   <  lv_ds  <= 80:
+        lv_ds  = "보통"
+    elif 80   <  ev_du  <= 150:
+        lv_ds  = "나쁨"
+    else:
+        lv_ds  = "매우나쁨"
+
+    print("미세먼지   : " + find_ds, lv_ds)
+    
+
+    # 초미세먼지
+#     find_M_ds = Ddata.select('dl.indicator>dd>span.num')[1].text   #  도 된다.
+    find_M_ds = Ddata.select('div.sub_info > div.detail_box > dl.indicator > dd.lv1 > span.num')[1].text # 왜 select_one 을 안 쓰나 했더니 내가 간과한 부분이 있었다. select_one은 맨 처음 것만 뽑아낸다는 것이다. 그러니 미세 먼지 아래에 2번째 행에 위치한 초미세먼지를 뽑기 위해 select를 쓴 후, 인덱스 [1]로 2번째 값에 위치한 숫자를 뽑아낸 것.
+    
+    #  이건 오답. select_one 을 쓰면 안 된다. ->  find_M_ds = Ddata.select_one('div.sub_info > div.detail_box > dl.indicator > dd.lv1 > span.num')[1].text
+    lv_M_ds = int(find_M_ds.strip('㎍/㎥'))
+    if lv_M_ds  <= 15:
+        lv_M_ds  = "좋음"
+    elif 15     <  lv_M_ds  <= 50:
+        lv_M_ds  = "보통"
+    elif 51     <  lv_M_ds  <= 100:
+        lv_M_ds  = "나쁨"
+    else:
+        lv_M_ds  = "매우나쁨"
+
+    print("초미세먼지 : " + find_M_ds, lv_M_ds)
+        
+    
+    
+    
+    
+    #################이제 covid-19
+    
+def covid_19():
+#     html   = requests.get('https://search.naver.com/search.naver?where=nexearch&sm=top_hty&fbm=1&ie=utf8&query=%EC%BD%94%EB%A1%9C%EB%82%98')
+#     soup   = b_s(html.text,'html.parser') # https://search.naver.com/search.naver?where=nexearch&sm=top_hty&fbm=1&ie=utf8&query=   뒤에 검색어만 쓰면 되는 편안한 주소. 네이버 주소는 계속 바뀌는데 이건 일정하다. 주소복사 같은 것으로 추출하면 될 것 같다. 추후 네이버를 쓸 때 요령껏 활용하면 되겠다.
+    html  = requests.get('http://ncov.mohw.go.kr/') # 이름을 살짝 바꿔줘야 변수끼리 충돌을 안 하겠지.
+    soup  = b_s(html.text,'html.parser')
+    Cdata = soup.select_one('div.liveNumOuter')  # 상위에 select_one을 줘도 되나 테스트. => 된다.
+    status= Cdata.select_one('h2>a').text # 이런 부분에서 경로를 찍는 요령 -> 마우스 커서와 F12 화면 번갈아보며 최적의 경로 찾으면 된다.
+#     print(status) # =>  환자 현황(7.16. 00시 기준, '20.1.3. 이후 누계)자세히   가 나온다.
+    status = status.split('자세히')[0]
+#     status = status.split('자세히')  =>  print(status)  # => ["환자 현황(7.16. 00시 기준, '20.1.3. 이후 누계)", '']   -> 리스트로 싸이네. 자세히는 split 하면서 날아가고, 그 자리에는 '' 가 남았다. 그래서  ,  인자 둘을 구분하고 있네.
+#     그래서 [0] 으로 인덱스해서 필요 없는 공백은 버리고 앞의 것을 취한다.
+    print(status)
+    dms  = Cdata.select_one('div.liveNum > ul > li:nth-child(1) > span.before').text # div 만 넣는 실험도 이따 해보자. => 된다.  div.liveNum   대신 div 만 넣어도 된다.
+    dms1 = dms.split('+')[1] # 스플릿으로 숫자 깔끔하게 뽑자.
+    dms2 = dms1.split(')')[0] # ')' 여기서는 ) 앞에 \(이스케이프 문자) 넣으면 안 된다. 그러면 )를 그대로 프린트 하도록 따로 인식이 되기 때문.
+    dms3 = format(int(dms2), ',')
+#     print(dms3)
+    
+    print('금일 국내 확진자 수 :   ', dms3, '명') # 콤마  ,  로 단위 표기까지 한 깔끔한 수를 뽑아냈다.
+    dms_s  = soup.select_one('body > div > div.mainlive_container > div.container > div > div.liveboard_layout > div.liveToggleOuter > div > div.live_left > div.liveTest.main_box_toggle > div.chart_d > div > div.cc_figure > p.numinfo2 > span.num_rnum').text
+    # 어렵게 할 필요 없이 Copy select 그대로 넣어도 된다. 효율적인 코드를 짜려면 다른 방법이 필요하겠지만. -> Cdata 처럼 미리 상위를 정해두는 것
+    print('누적 국내 확진자 수 : ', dms_s, '명')
+    
+    
+    
+    
+    ###########################다음은 주식 종목
+    
+    
+    
+def popular_stock():
+    html  = requests.get('https://finance.naver.com/sise/lastsearch2.nhn')
+    soup  = b_s(html.text, 'html.parser')
+    Sdata = soup.select('#contentarea > div.box_type_l > table > tbody > tr:nth-child(3) > td.no')
+    
+    
+# 종목명#contentarea > div.box_type_l > table > tbody > tr:nth-child(3) > td:nth-child(2) > a
+# 현재가#contentarea > div.box_type_l > table > tbody > tr:nth-child(3) > td:nth-child(4)
+# 전일비#contentarea > div.box_type_l > table > tbody > tr:nth-child(3) > td:nth-child(5) > span
+# 등락률#contentarea > div.box_type_l > table > tbody > tr:nth-child(3) > td:nth-child(6) > span
+# 거래량#contentarea > div.box_type_l > table > tbody > tr:nth-child(3) > td:nth-child(7)
+    s_n   = soup.select(' td:nth-child(2) > a')
+    s_p   = soup.select(' td:nth-child(4)')
+    s_d   = soup.select(' td:nth-child(5) > span')
+    s_u   = soup.select(' td:nth-child(6) > span')
+    s_v   = soup.select(' td:nth-child(7)')
+    
+    stock = pd.DataFrame([s_n , s_p , s_d , s_u , s_v])  # 여기부터 pandas 필요
+    stock = stock.transpose() # 더 쉽게 볼 수 있도록 array를 90도 돌림
+    stock = stock.rename(columns={0:'종목명',1:'현재가',2:'전일비',3:'등락률',4:'거래량'})
+    return display(stock)
+    df.head(20) # stock.head(20) 하면 반응이 없다. => head가 df 의 모듈이라서?
+#     req = requests.get('https://finance.naver.com/sise/')
+#     html = req.text
+#     soup = b_s(html,'html.parser')
+    
+#     stock_names = soup.select('ul.lst_pop>li>a')  # 1
+# #     for stock_name in stock_names:
+# #         print(stock_name.text)
+
+#     stock_costs = soup.select('ul.lst_pop>li>span')  # 2
+# #     for stock_cost in stock_costs:
+# #         print(stock_cost.text)
+#     stock_costs
+    
+#     stock_vars = soup.select('ul.lst_pop>li>em.bu_p>span.blind')  # 3
+# #     for stocks_var in stocks_vars:
+# #         print(stocks_var.string)
+
+#     stock = pd.DataFrame([stock_names,stock_costs,stock_vars])
+#     stock = stock.transpose()
+#     stock = stock.rename(columns={0:'종목명',1:'현재가',2:'변화'})
+#     return display(stock)
+
+
+
+
+###################### 주식 일단 pass 하고 뉴스로.
+
+def NEWS():
+    url = 'https://news.naver.com/'
+    headers = {'User-Agent':'Mozilla/5.0 (Windosws NT 6.3; Win64; x64) AppleWebKit/537.36(KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36'}
+    res = requests.get(url,headers=headers)
+    news_soup = b_s(res.text,'html.parser')
+    headline_titles = news_soup.select('div.hdline_news>ul.hdline_article_list>li>div.hdline_article_tit')
+    headline_title = []
+    for title in headline_titles:
+        headline_title.append(title.text.strip())
+    headline_title
+
+    headline_links = news_soup.select('div.hdline_news>ul.hdline_article_list>li>div.hdline_article_tit>a')
+    headline_link = []
+    for link in headline_links:
+        headline_link.append("https://news.naver.com"+link.get('href'))
+    headline_link
+
+    headline_news = pd.DataFrame([headline_title,headline_link]).T
+    headline_news.rename(columns = {0:'Headline News Title',1:'Link'},inplace=True)
+    headline_news['Link'] = headline_news['Link'].apply(lambda x : make_hyper(x))
+    folder_path = os.getcwd()
+    headline_news.to_excel('Today News.xlsx')
+    os.startfile(folder_path)
+
+    
+    
+    
+    def make_hyper(value):
+        return '=HYPERLINK("%s")' % (value.format(value))
+    def make_clickable(val):
+        return '<a href="{}">{}</a>'.format(val,val)
+    return headline_news.style.format(make_clickable)
+
+
+
+
+
+
+    def make_clickable(val):
+        return '<a href="{}">{}</a>'.format(val,val)
+    return headline_news.style.format(make_clickable)
+# 위 3줄 없어도 날씨 된다. -> 그럼 어디에 필요한 거지? -> 
+
+
+
+print('#'*50)
+print('        ',today,"의 리마인더입니다.")
+print('#'*50,'\n\n')
+print('1.날씨')
+print('*'*50)
+print("                        오늘")
+print('-'*50)
+today_weather()
+#
+print()
+print('-'*50)
+print("                 내일 오전 날씨입니다.")
+print('-'*50)
+tomorrow_weather()
+#
+print('*'*50)
+print("<미세먼지>")
+print('-'*50)
+dust() # 이게 없으면 바로 윗줄의 -------- 이후로 프린트가 안 된다.
+#
+print()
+print('2.코로나19 현재 상황')
+print('*'*50,'\n\n')
+covid_19()
+#
+print()
+print('='*50,'\n')
+print('3.증시 현황')
+popular_stock()
+#
+print()
+print('4. News')
+NEWS()
